@@ -1,164 +1,186 @@
-import pandas as pd
-import numpy as np
+import math
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import SimpleRNN, Dense
-from sklearn.metrics.pairwise import cosine_similarity
 
-# Expanded Data
-data = {
-    'name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Hank', 'Isla', 'Jack', 'Kara', 'Leo'],
-    'age': [25, 30, 27, 22, 28, 35, 29, 31, 26, 24, 33, 32],
-    'gender': ['Female', 'Male', 'Male', 'Female', 'Female', 'Male', 'Female', 'Male', 'Female', 'Male', 'Female', 'Male'],
-    'preferred_gender': ['Male', 'Female', 'Female', 'Male', 'Male', 'Female', 'Male', 'Female', 'Male', 'Female', 'Male', 'Female'],
-    'hobbies': [['music', 'sports', 'travel'], 
-                ['reading', 'sports', 'cooking'], 
-                ['music', 'gaming', 'travel'],
-                ['sports', 'travel', 'art'], 
-                ['music', 'sports', 'cooking'],
-                ['cooking', 'gaming', 'travel'], 
-                ['sports', 'art', 'reading'], 
-                ['music', 'travel', 'gaming'], 
-                ['reading', 'travel', 'music'], 
-                ['sports', 'music', 'travel'], 
-                ['cooking', 'reading', 'art'], 
-                ['music', 'travel', 'gaming']],
-    'location': ['New York', 'Los Angeles', 'Chicago', 'New York', 'Chicago', 'San Francisco', 'New York', 'Los Angeles', 'Chicago', 'San Francisco', 'New York', 'Los Angeles']
-}
+# Class to hold user data
+class User:
+    def __init__(self, name, age, gender, preferred_gender, hobbies, favorite_pet, location, min_age, max_age):
+        self.name = name
+        self.age = age
+        self.gender = gender
+        self.preferred_gender = preferred_gender
+        self.hobbies = hobbies
+        self.favorite_pet = favorite_pet
+        self.location = location
+        self.min_age = min_age
+        self.max_age = max_age
 
-# Convert to DataFrame
-df = pd.DataFrame(data)
+# Function to compute cosine similarity between two vectors (hobbies)
+def cosine_similarity(a, b):
+    dot_product = sum(a[i] * b[i] for i in range(len(a)))
+    norm_a = math.sqrt(sum(a[i] * a[i] for i in range(len(a))))
+    norm_b = math.sqrt(sum(b[i] * b[i] for i in range(len(b))))
+    
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0  # Prevent division by zero
+    
+    return dot_product / (norm_a * norm_b)
 
-# Function to collect user input
+# Function to encode hobbies (turn them into numerical vectors)
+def encode_hobbies(hobbies, all_hobbies):
+    hobby_vector = [0] * len(all_hobbies)
+    for hobby in hobbies:
+        if hobby in all_hobbies:
+            hobby_vector[all_hobbies.index(hobby)] = 1
+    return hobby_vector
+
+# Function to compute a match score based on multiple criteria
+def compute_match_score(user, other_user, all_hobbies):
+    # Cosine similarity for hobbies
+    user_hobby_vector = encode_hobbies(user.hobbies, all_hobbies)
+    other_user_hobby_vector = encode_hobbies(other_user.hobbies, all_hobbies)
+    hobby_similarity = cosine_similarity(user_hobby_vector, other_user_hobby_vector)
+    
+    # Age difference score (smaller difference = better match)
+    age_diff = abs(user.age - other_user.age)
+    if other_user.age < user.min_age or other_user.age > user.max_age:
+        age_score = 0
+    else:
+        age_score = max(0, 1 - (age_diff / 10))  # Max age difference of 10 years
+    
+    # Location score (same city = higher score)
+    location_score = 1 if user.location == other_user.location else 0.5
+    
+    # Pet preference score (same pet = higher score)
+    pet_score = 1 if user.favorite_pet == other_user.favorite_pet else 0.5
+    
+    # Total score is a weighted sum of all criteria
+    total_score = (0.4 * hobby_similarity) + (0.3 * age_score) + (0.2 * location_score) + (0.1 * pet_score)
+    
+    return total_score
+
+# Function to visualize similarity scores
+def visualize_scores(users, scores):
+    plt.bar([user.name for user in users], scores)
+    plt.xlabel("Users")
+    plt.ylabel("Match Score")
+    plt.title("Match Scores for Potential Matches")
+    plt.show()
+
+# Function to get user input
 def get_user_input():
     print("Enter your details:")
     name = input("Name: ")
     age = int(input("Age: "))
     gender = input("Gender (Male/Female/Other): ")
     preferred_gender = input("Preferred Gender to date (Male/Female/Other): ")
-    age_min = int(input("Minimum age to date: "))
-    age_max = int(input("Maximum age to date: "))
-    hobbies = input("Top 3 Hobbies (comma-separated): ").split(", ")
+    min_age = int(input("Minimum Age to date: "))
+    max_age = int(input("Maximum Age to date: "))
+    hobbies_str = input("Top 3 Hobbies (comma-separated): ")
+    hobbies = [hobby.strip() for hobby in hobbies_str.split(",")]
+    favorite_pet = input("Favorite pet (Dog/Cat): ")
     location = input("Location: ")
-    
-    # Return data as dictionary
-    return {
-        'name': name,
-        'age': age,
-        'gender': gender,
-        'preferred_gender': preferred_gender,
-        'age_range': (age_min, age_max),
-        'hobbies': hobbies,
-        'location': location
-    }
 
-# Function to preprocess user input and database
-def preprocess_data(df, user_data):
-    # Preprocessing categorical columns using OneHotEncoding
-    encoder = OneHotEncoder(sparse_output=False)
-    encoded_gender = encoder.fit_transform(df[['gender', 'preferred_gender', 'location']])
-    
-    # Encode hobbies using LabelEncoder
-    hobby_encoder = LabelEncoder()
-    flat_hobbies = [item for sublist in df['hobbies'] for item in sublist]
-    hobby_encoder.fit(flat_hobbies)
-    
-    df['hobbies_encoded'] = df['hobbies'].apply(lambda h: hobby_encoder.transform(h))
-    
-    # Prepare final feature set
-    df['features'] = df.apply(lambda row: np.concatenate((
-        [row['age']],  # Age as a single numerical feature
-        encoded_gender[row.name],  # One-hot encoded gender, preferred_gender, and location
-        row['hobbies_encoded']  # Encoded hobbies
-    )), axis=1)
-    
-    # Process user input similarly
-    user_gender_encoded = encoder.transform([[user_data['gender'], user_data['preferred_gender'], user_data['location']]])
-    user_hobbies_encoded = hobby_encoder.transform(user_data['hobbies'])
-    user_features = np.concatenate((
-        [user_data['age']], 
-        user_gender_encoded[0], 
-        user_hobbies_encoded
-    ))
-    
-    return df, user_features
+    return User(name, age, gender, preferred_gender, hobbies, favorite_pet, location, min_age, max_age)
 
-# RNN Model for Matching
-def build_rnn_model(input_shape):
-    model = Sequential()
-    model.add(SimpleRNN(64, input_shape=(input_shape, 1), activation='relu'))
-    model.add(Dense(32, activation='relu'))
-    model.add(Dense(1, activation='linear'))
-    model.compile(optimizer='adam', loss='mse')
-    return model
+# Function to separate users by gender
+def separate_by_gender(users):
+    male_users = [user for user in users if user.gender == "Male"]
+    female_users = [user for user in users if user.gender == "Female"]
+    
+    return male_users, female_users
 
-# Training the RNN on sequential data
-def train_rnn(df, user_features):
-    # Preparing the data for RNN
-    features = np.array(df['features'].tolist())
-    features = features.reshape((features.shape[0], features.shape[1], 1))  # Reshape for RNN input
-    
-    # Build and train RNN
-    model = build_rnn_model(features.shape[1])
-    model.fit(features, features, epochs=200, verbose=0)  # Increased epochs to 200 for better performance
-    
-    # Predict user match scores
-    user_features = user_features.reshape((1, len(user_features), 1))
-    predictions = model.predict(user_features)
-    return predictions
+# Function to find and rank matches based on a score from the preferred gender
+def find_matches(user, male_users, female_users, all_hobbies):
+    # Choose the dataset based on the user's preferred gender
+    if user.preferred_gender == "Male":
+        potential_matches = male_users
+    elif user.preferred_gender == "Female":
+        potential_matches = female_users
+    else:
+        # For simplicity, we assume "Other" matches with both male and female users
+        potential_matches = male_users + female_users
 
-# Find matches based on RNN predictions and cosine similarity
-def find_matches(df, user_features, user_data):
-    features = np.array(df['features'].tolist())
-    similarity_scores = cosine_similarity([user_features], features)[0]
-    df['similarity'] = similarity_scores
-    
-    # Filter based on preferred gender
-    matches = df[df['gender'] == user_data['preferred_gender']]
-    
-    # Filter based on age range
-    matches = matches[matches['age'].between(user_data['age_range'][0], user_data['age_range'][1])]
-    
-    return matches.sort_values(by='similarity', ascending=False)
+    matches = []
+    scores = []
 
-# Visualize the matching results
-def visualize_matches(matches):
-    # Age distribution of matches
-    plt.figure(figsize=(10, 5))
-    sns.histplot(matches['age'], kde=True)
-    plt.title("Age Distribution of Potential Matches")
-    plt.xlabel("Age")
-    plt.ylabel("Count")
-    plt.show()
+    for other_user in potential_matches:
+        # Check age range preference
+        if other_user.age < user.min_age or other_user.age > user.max_age:
+            continue
+
+        # Compute the match score based on multiple criteria
+        score = compute_match_score(user, other_user, all_hobbies)
+        
+        if score > 0.5:  # Threshold to filter out low matches
+            matches.append(other_user)
+            scores.append(score)
+
+    # Sort matches based on score
+    sorted_matches = [match for _, match in sorted(zip(scores, matches), reverse=True)]
+    sorted_scores = sorted(scores, reverse=True)
     
-    # Hobbies distribution of matches
-    hobbies = [hobby for sublist in matches['hobbies'] for hobby in sublist]
-    plt.figure(figsize=(10, 5))
-    sns.countplot(x=hobbies)
-    plt.title("Hobbies Distribution of Potential Matches")
-    plt.xlabel("Hobbies")
-    plt.ylabel("Count")
-    plt.show()
+    return sorted_matches, sorted_scores
+
+# Function to display matches and their scores
+def display_matches(matches, scores):
+    if not matches:
+        print("\nNo matches found.")
+        return
     
-# Main flow
+    print("\nPotential matches found:")
+    for i, match in enumerate(matches):
+        print(f"Name: {match.name}")
+        print(f"Age: {match.age}")
+        print(f"Location: {match.location}")
+        print(f"Match Score: {scores[i]:.2f}")
+        print("-----------------------")
+
+def main():
+    # Sample data of users
+    users = [
+        User("Alisha", 25, "Female", "Male", ["music", "sports", "travel"], "Dog", "Noida", 22, 30),
+        User("Bunny", 30, "Male", "Female", ["reading", "sports", "cooking"], "Cat", "Delhi", 25, 35),
+        User("Chetna", 27, "Male", "Female", ["music", "gaming", "travel"], "Dog", "Chennai", 24, 32),
+        User("Dia", 22, "Female", "Male", ["sports", "travel", "art"], "Dog", "Noida", 20, 28),
+        User("Simran", 28, "Female", "Male", ["music", "sports", "cooking"], "Cat", "Chennai", 25, 32),
+        User("Arjun", 26, "Male", "Female", ["gaming", "fitness", "music"], "Dog", "Bangalore", 23, 30),
+        User("Sara", 24, "Female", "Male", ["reading", "yoga", "travel"], "Cat", "Hyderabad", 22, 28),
+        User("Rahul", 29, "Male", "Female", ["movies", "fitness", "cooking"], "Dog", "Mumbai", 25, 34),
+        User("Priya", 27, "Female", "Male", ["dancing", "sports", "travel"], "Dog", "Mumbai", 24, 32),
+        User("Vikram", 31, "Male", "Female", ["reading", "movies", "fitness"], "Cat", "Delhi", 27, 35),
+        User("Kavya", 26, "Female", "Male", ["photography", "music", "cooking"], "Dog", "Bangalore", 24, 30),
+        User("Karan", 28, "Male", "Female", ["gaming", "movies", "sports"], "Dog", "Kolkata", 25, 33),
+        User("Aisha", 25, "Female", "Male", ["travel", "dancing", "fitness"], "Cat", "Ahmedabad", 22, 30),
+        User("Rohit", 27, "Male", "Female", ["photography", "yoga", "movies"], "Dog", "Pune", 24, 32),
+        User("Neha", 23, "Female", "Male", ["sports", "art", "yoga"], "Cat", "Pune", 20, 26),
+        User("Aman", 29, "Male", "Female", ["sports", "music", "gaming"], "Dog", "Jaipur", 25, 33),
+        User("Riya", 24, "Female", "Male", ["movies", "yoga", "dancing"], "Cat", "Kolkata", 22, 27),
+        User("Yash", 28, "Male", "Female", ["fitness", "travel", "photography"], "Dog", "Hyderabad", 24, 32),
+        User("Isha", 26, "Female", "Male", ["art", "photography", "music"], "Cat", "Delhi", 23, 29),
+        User("Manish", 27, "Male", "Female", ["gaming", "movies", "fitness"], "Dog", "Bangalore", 24, 32),
+        User("Meera", 28, "Female", "Male", ["yoga", "fitness", "cooking"], "Dog", "Noida", 25, 32),
+        User("Nikhil", 30, "Male", "Female", ["sports", "movies", "reading"], "Cat", "Chennai", 26, 34),
+        User("Tanvi", 24, "Female", "Male", ["dancing", "sports", "music"], "Dog", "Jaipur", 21, 27),
+        User("Siddharth", 29, "Male", "Female", ["music", "travel", "gaming"], "Dog", "Delhi", 25, 33),
+    ]
+
+    # Define all possible hobbies
+    all_hobbies = ["music", "sports", "travel", "reading", "gaming", "cooking", "art"]
+
+    # Separate users by gender
+    male_users, female_users = separate_by_gender(users)
+
+    # Get the current user input
+    current_user = get_user_input()
+
+    # Find and rank matches
+    matches, scores = find_matches(current_user, male_users, female_users, all_hobbies)
+
+    # Visualize match scores
+    visualize_scores(matches, scores)
+
+    # Display matches and their scores
+    display_matches(matches, scores)
+
 if __name__ == "__main__":
-    # Get user input
-    user_data = get_user_input()
-
-    # Preprocess data and user input
-    df, user_features = preprocess_data(df, user_data)
-
-    # Train RNN and get matches
-    predictions = train_rnn(df, user_features)
-
-    # Find matches based on predictions and gender preference
-    matches = find_matches(df, user_features, user_data)
-
-    # Show the matching results
-    print(f"Top matches for {user_data['name']}:")
-    print(matches[['name', 'age', 'hobbies', 'location', 'similarity']])
-
-    # Visualize matches
-    visualize_matches(matches)
+    main()
