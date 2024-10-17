@@ -127,7 +127,14 @@ def main():
         User("Pooja", 30, "Female", "Male", ["fitness", "art", "sports"], "Dog", "Bangalore", 27, 35),
         User("Ravi", 35, "Male", "Female", ["reading", "gaming", "travel"], "Cat", "Delhi", 31, 40),
         User("Anisha", 25, "Female", "Male", ["travel", "fitness", "music"], "Dog", "Noida", 22, 30),
-        User("Gaurav", 26, "Male", "Female", ["cooking", "movies", "sports"], "Cat", "Mumbai", 24, 34)
+        User("Gaurav", 26, "Male", "Female", ["cooking", "movies", "sports"], "Cat", "Mumbai", 23, 32),
+        User("Simran", 32, "Female", "Male", ["yoga", "art", "fitness"], "Dog", "Hyderabad", 29, 36),
+        User("Vivek", 29, "Male", "Female", ["fitness", "sports", "cooking"], "Cat", "Chennai", 25, 34),
+        User("Jaya", 24, "Female", "Male", ["music", "travel", "reading"], "Dog", "Bangalore", 21, 29),
+        User("Siddharth", 27, "Male", "Female", ["movies", "art", "yoga"], "Cat", "Delhi", 24, 32),
+        User("Neeraj", 30, "Male", "Female", ["fitness", "gaming", "travel"], "Dog", "Mumbai", 27, 35),
+        User("Lata", 28, "Female", "Male", ["sports", "cooking", "reading"], "Cat", "Hyderabad", 25, 34),
+        User("Amit", 26, "Male", "Female", ["travel", "music", "yoga"], "Dog", "Delhi", 23, 31),
     ]
     
     # Define all hobbies
