@@ -1,5 +1,9 @@
 import math
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import numpy as np
+import pandas as pd  # Importing pandas for correlation matrix
 
 # Class to hold user data
 class User:
@@ -33,30 +37,49 @@ def encode_hobbies(hobbies, all_hobbies):
             hobby_vector[all_hobbies.index(hobby)] = 1
     return hobby_vector
 
-# Function to compute a match score based on multiple criteria
-def compute_match_score(user, other_user, all_hobbies):
-    # Cosine similarity for hobbies
+# Function to prepare data for machine learning
+def prepare_match_data(user, other_user, all_hobbies):
     user_hobby_vector = encode_hobbies(user.hobbies, all_hobbies)
     other_user_hobby_vector = encode_hobbies(other_user.hobbies, all_hobbies)
     hobby_similarity = cosine_similarity(user_hobby_vector, other_user_hobby_vector)
     
-    # Age difference score (smaller difference = better match)
     age_diff = abs(user.age - other_user.age)
-    if other_user.age < user.min_age or other_user.age > user.max_age:
-        age_score = 0
-    else:
-        age_score = max(0, 1 - (age_diff / 10))  # Max age difference of 10 years
+    location_match = 1 if user.location == other_user.location else 0
+    pet_match = 1 if user.favorite_pet == other_user.favorite_pet else 0
     
-    # Location score (same city = higher score)
-    location_score = 1 if user.location == other_user.location else 0.5
+    return [hobby_similarity, age_diff, location_match, pet_match]
+
+# Function to generate a random dataset for training
+def generate_training_data(users, all_hobbies):
+    X_train = []
+    y_train = []
     
-    # Pet preference score (same pet = higher score)
-    pet_score = 1 if user.favorite_pet == other_user.favorite_pet else 0.5
+    # Simulate matching data
+    for i in range(len(users)):
+        for j in range(i + 1, len(users)):
+            user1 = users[i]
+            user2 = users[j]
+            # Only consider users with compatible gender preferences
+            if (user1.preferred_gender == user2.gender and user2.preferred_gender == user1.gender):
+                match_features = prepare_match_data(user1, user2, all_hobbies)
+                X_train.append(match_features)
+                # Simulate a random outcome (1 = match, 0 = no match)
+                outcome = np.random.choice([0, 1])
+                y_train.append(outcome)
     
-    # Total score is a weighted sum of all criteria
-    total_score = (0.4 * hobby_similarity) + (0.3 * age_score) + (0.2 * location_score) + (0.1 * pet_score)
-    
-    return total_score
+    return np.array(X_train), np.array(y_train)
+
+# Function to train a logistic regression model
+def train_match_model(users, all_hobbies):
+    X_train, y_train = generate_training_data(users, all_hobbies)
+    model = LogisticRegression()
+    model.fit(X_train, y_train)
+    return model, X_train, y_train  # Return the model and training data
+
+# Function to predict match using the trained model
+def predict_match(user, potential_matches, model, all_hobbies):
+    X_test = [prepare_match_data(user, match, all_hobbies) for match in potential_matches]
+    return model.predict(X_test), model.predict_proba(X_test)[:, 1]  # Probabilities for being a match
 
 # Function to visualize similarity scores
 def visualize_scores(users, scores):
@@ -65,61 +88,6 @@ def visualize_scores(users, scores):
     plt.ylabel("Match Score")
     plt.title("Match Scores for Potential Matches")
     plt.show()
-
-# Function to get user input
-def get_user_input():
-    print("Enter your details:")
-    name = input("Name: ")
-    age = int(input("Age: "))
-    gender = input("Gender (Male/Female/Other): ")
-    preferred_gender = input("Preferred Gender to date (Male/Female/Other): ")
-    min_age = int(input("Minimum Age to date: "))
-    max_age = int(input("Maximum Age to date: "))
-    hobbies_str = input("Top 3 Hobbies (comma-separated): ")
-    hobbies = [hobby.strip() for hobby in hobbies_str.split(",")]
-    favorite_pet = input("Favorite pet (Dog/Cat): ")
-    location = input("Location: ")
-
-    return User(name, age, gender, preferred_gender, hobbies, favorite_pet, location, min_age, max_age)
-
-# Function to separate users by gender
-def separate_by_gender(users):
-    male_users = [user for user in users if user.gender == "Male"]
-    female_users = [user for user in users if user.gender == "Female"]
-    
-    return male_users, female_users
-
-# Function to find and rank matches based on a score from the preferred gender
-def find_matches(user, male_users, female_users, all_hobbies):
-    # Choose the dataset based on the user's preferred gender
-    if user.preferred_gender == "Male":
-        potential_matches = male_users
-    elif user.preferred_gender == "Female":
-        potential_matches = female_users
-    else:
-        # For simplicity, we assume "Other" matches with both male and female users
-        potential_matches = male_users + female_users
-
-    matches = []
-    scores = []
-
-    for other_user in potential_matches:
-        # Check age range preference
-        if other_user.age < user.min_age or other_user.age > user.max_age:
-            continue
-
-        # Compute the match score based on multiple criteria
-        score = compute_match_score(user, other_user, all_hobbies)
-        
-        if score > 0.5:  # Threshold to filter out low matches
-            matches.append(other_user)
-            scores.append(score)
-
-    # Sort matches based on score
-    sorted_matches = [match for _, match in sorted(zip(scores, matches), reverse=True)]
-    sorted_scores = sorted(scores, reverse=True)
-    
-    return sorted_matches, sorted_scores
 
 # Function to display matches and their scores
 def display_matches(matches, scores):
@@ -135,52 +103,63 @@ def display_matches(matches, scores):
         print(f"Match Score: {scores[i]:.2f}")
         print("-----------------------")
 
+# Function to calculate and display the confusion matrix
+def display_confusion_matrix(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Match', 'Match'])
+    disp.plot(cmap=plt.cm.Blues)
+    plt.title("Confusion Matrix")
+    plt.show()
+
 def main():
     # Sample data of users
     users = [
-        User("Alisha", 25, "Female", "Male", ["music", "sports", "travel"], "Dog", "Noida", 22, 30),
-        User("Bunny", 30, "Male", "Female", ["reading", "sports", "cooking"], "Cat", "Delhi", 25, 35),
-        User("Chetna", 27, "Male", "Female", ["music", "gaming", "travel"], "Dog", "Chennai", 24, 32),
-        User("Dia", 22, "Female", "Male", ["sports", "travel", "art"], "Dog", "Noida", 20, 28),
-        User("Simran", 28, "Female", "Male", ["music", "sports", "cooking"], "Cat", "Chennai", 25, 32),
-        User("Arjun", 26, "Male", "Female", ["gaming", "fitness", "music"], "Dog", "Bangalore", 23, 30),
-        User("Sara", 24, "Female", "Male", ["reading", "yoga", "travel"], "Cat", "Hyderabad", 22, 28),
-        User("Rahul", 29, "Male", "Female", ["movies", "fitness", "cooking"], "Dog", "Mumbai", 25, 34),
-        User("Priya", 27, "Female", "Male", ["dancing", "sports", "travel"], "Dog", "Mumbai", 24, 32),
-        User("Vikram", 31, "Male", "Female", ["reading", "movies", "fitness"], "Cat", "Delhi", 27, 35),
-        User("Kavya", 26, "Female", "Male", ["photography", "music", "cooking"], "Dog", "Bangalore", 24, 30),
-        User("Karan", 28, "Male", "Female", ["gaming", "movies", "sports"], "Dog", "Kolkata", 25, 33),
-        User("Aisha", 25, "Female", "Male", ["travel", "dancing", "fitness"], "Cat", "Ahmedabad", 22, 30),
-        User("Rohit", 27, "Male", "Female", ["photography", "yoga", "movies"], "Dog", "Pune", 24, 32),
-        User("Neha", 23, "Female", "Male", ["sports", "art", "yoga"], "Cat", "Pune", 20, 26),
-        User("Aman", 29, "Male", "Female", ["sports", "music", "gaming"], "Dog", "Jaipur", 25, 33),
-        User("Riya", 24, "Female", "Male", ["movies", "yoga", "dancing"], "Cat", "Kolkata", 22, 27),
-        User("Yash", 28, "Male", "Female", ["fitness", "travel", "photography"], "Dog", "Hyderabad", 24, 32),
-        User("Isha", 26, "Female", "Male", ["art", "photography", "music"], "Cat", "Delhi", 23, 29),
-        User("Manish", 27, "Male", "Female", ["gaming", "movies", "fitness"], "Dog", "Bangalore", 24, 32),
-        User("Meera", 28, "Female", "Male", ["yoga", "fitness", "cooking"], "Dog", "Noida", 25, 32),
-        User("Nikhil", 30, "Male", "Female", ["sports", "movies", "reading"], "Cat", "Chennai", 26, 34),
-        User("Tanvi", 24, "Female", "Male", ["dancing", "sports", "music"], "Dog", "Jaipur", 21, 27),
-        User("Siddharth", 29, "Male", "Female", ["music", "travel", "gaming"], "Dog", "Delhi", 25, 33),
+        User("Neha", 26, "Female", "Male", ["fitness", "cooking", "art"], "Dog", "Delhi", 24, 30),
+        User("Karan", 33, "Male", "Female", ["sports", "music", "gaming"], "Cat", "Chennai", 30, 38),
+        User("Sanjana", 29, "Female", "Male", ["travel", "reading", "movies"], "Dog", "Mumbai", 25, 34),
+        User("Rahul", 25, "Male", "Female", ["gaming", "fitness", "sports"], "Dog", "Noida", 22, 28),
+        User("Tina", 31, "Female", "Male", ["yoga", "art", "travel"], "Cat", "Bangalore", 28, 36),
+        User("Mohit", 24, "Male", "Female", ["music", "fitness", "cooking"], "Dog", "Delhi", 21, 30),
+        User("Aditi", 27, "Female", "Male", ["dance", "cooking", "travel"], "Dog", "Chennai", 24, 32),
+        User("Rohit", 29, "Male", "Female", ["movies", "fitness", "reading"], "Cat", "Hyderabad", 26, 34),
+        User("Sita", 22, "Female", "Male", ["sports", "music", "art"], "Dog", "Mumbai", 20, 27),
+        User("Aarav", 28, "Male", "Female", ["cooking", "travel", "fitness"], "Cat", "Delhi", 25, 33),
+        User("Pooja", 30, "Female", "Male", ["fitness", "art", "sports"], "Dog", "Bangalore", 27, 35),
+        User("Ravi", 35, "Male", "Female", ["reading", "gaming", "travel"], "Cat", "Delhi", 31, 40),
+        User("Anisha", 25, "Female", "Male", ["travel", "fitness", "music"], "Dog", "Noida", 22, 30),
+        User("Gaurav", 26, "Male", "Female", ["cooking", "movies", "sports"], "Cat", "Mumbai", 24, 34)
     ]
+    
+    # Define all hobbies
+    all_hobbies = list(set(hobby for user in users for hobby in user.hobbies))
+    
+    # Train the logistic regression model
+    model, X_train, y_train = train_match_model(users, all_hobbies)
 
-    # Define all possible hobbies
-    all_hobbies = ["music", "sports", "travel", "reading", "gaming", "cooking", "art"]
+    # Calculate accuracy
+    accuracy = model.score(X_train, y_train)
+    print(f"\nModel Accuracy: {accuracy:.2f}")
 
-    # Separate users by gender
-    male_users, female_users = separate_by_gender(users)
+    # Calculate and print the correlation matrix
+    df = pd.DataFrame(X_train, columns=['Hobby Similarity', 'Age Difference', 'Location Match', 'Pet Match'])
+    correlation_matrix = df.corr()
+    print("\nCorrelation Matrix:")
+    print(correlation_matrix)
 
     # Get the current user input
-    current_user = get_user_input()
+    current_user = User("Arun", 21, "Male", "Female", ["music", "yoga", "gaming"], "Dog", "Delhi", 20, 25)
 
-    # Find and rank matches
-    matches, scores = find_matches(current_user, male_users, female_users, all_hobbies)
+    # Get potential matches
+    potential_matches = [user for user in users if user != current_user]
 
-    # Visualize match scores
-    visualize_scores(matches, scores)
+    # Predict matches
+    match_predictions, match_probabilities = predict_match(current_user, potential_matches, model, all_hobbies)
 
-    # Display matches and their scores
-    display_matches(matches, scores)
+    # Display matches with their scores
+    display_matches(potential_matches, match_probabilities)
+
+    # Display the confusion matrix
+    display_confusion_matrix(y_train, model.predict(X_train))  # Compare true labels with predictions on training data
 
 if __name__ == "__main__":
     main()
