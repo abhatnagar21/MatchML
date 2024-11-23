@@ -1,172 +1,159 @@
-import math
+import math  # importing math for maths operations
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-import numpy as np
-import pandas as pd  # Importing pandas for correlation matrix
+from sklearn.linear_model import LogisticRegression  
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay  # for evaluating model performance
+import numpy as np  
+import pandas as pd  
 
-# Class to hold user data
+# hold user data
 class User:
-    def __init__(self, name, age, gender, preferred_gender, hobbies, favorite_pet, location, min_age, max_age):
+    def __init__(self, name, age, gender, preferredgender, hobbies, favoritepet, location, minage, maxage):
+        # initialize user attributes
         self.name = name
         self.age = age
         self.gender = gender
-        self.preferred_gender = preferred_gender
+        self.preferredgender = preferredgender
         self.hobbies = hobbies
-        self.favorite_pet = favorite_pet
+        self.favoritepet = favoritepet
         self.location = location
-        self.min_age = min_age
-        self.max_age = max_age
+        self.minage = minage
+        self.maxage = maxage
 
-# Function to compute cosine similarity between two vectors (hobbies)
-def cosine_similarity(a, b):
-    dot_product = sum(a[i] * b[i] for i in range(len(a)))
-    norm_a = math.sqrt(sum(a[i] * a[i] for i in range(len(a))))
-    norm_b = math.sqrt(sum(b[i] * b[i] for i in range(len(b))))
-    
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0  # Prevent division by zero
-    
-    return dot_product / (norm_a * norm_b)
+# function to compute cosine similarity between 2 vectors
+def cosinesimilarity(a, b):
+    # calculate the dot product of two vectors
+    dotproduct = sum(a[i] * b[i] for i in range(len(a)))
+    # calculate the normal of each vector
+    norma = math.sqrt(sum(a[i] * a[i] for i in range(len(a))))
+    normb = math.sqrt(sum(b[i] * b[i] for i in range(len(b))))
+    # if normal is 0
+    if norma == 0.0 or normb == 0.0:
+        return 0.0
+    # return cosine similarity
+    return dotproduct / (norma * normb)
 
-# Function to encode hobbies (turn them into numerical vectors)
-def encode_hobbies(hobbies, all_hobbies):
-    hobby_vector = [0] * len(all_hobbies)
+# function to encode hobbies
+def encodehobbies(hobbies, allhobbies):
+    # create a zero vector of size equal to the total number of hobbies
+    hobbyvector = [0] * len(allhobbies)
     for hobby in hobbies:
-        if hobby in all_hobbies:
-            hobby_vector[all_hobbies.index(hobby)] = 1
-    return hobby_vector
+        # mark 1 if the hobby exists in the list of all hobbies
+        if hobby in allhobbies:
+            hobbyvector[allhobbies.index(hobby)] = 1
+    return hobbyvector
 
-# Function to prepare data for machine learning
-def prepare_match_data(user, other_user, all_hobbies):
-    user_hobby_vector = encode_hobbies(user.hobbies, all_hobbies)
-    other_user_hobby_vector = encode_hobbies(other_user.hobbies, all_hobbies)
-    hobby_similarity = cosine_similarity(user_hobby_vector, other_user_hobby_vector)
-    
-    age_diff = abs(user.age - other_user.age)
-    location_match = 1 if user.location == other_user.location else 0
-    pet_match = 1 if user.favorite_pet == other_user.favorite_pet else 0
-    
-    return [hobby_similarity, age_diff, location_match, pet_match]
+# data preprocessing
+def preparematchdata(user, otheruser, allhobbies):
+    # encode hobbies into vectors
+    userhobbyvector = encodehobbies(user.hobbies, allhobbies)
+    otheruserhobbyvector = encodehobbies(otheruser.hobbies, allhobbies)
+    # compute similarity between hobby vectors
+    hobbysimilarity = cosinesimilarity(userhobbyvector, otheruserhobbyvector)
+    # calculate absolute age difference
+    agediff = abs(user.age - otheruser.age)
+    # check if locations match (1 match, else 0)
+    locationmatch = 1 if user.location == otheruser.location else 0
+    # check if favorite pets match (1 for match, else 0)
+    petmatch = 1 if user.favoritepet == otheruser.favoritepet else 0
+    # return feature vector
+    return [hobbysimilarity, agediff, locationmatch, petmatch]
 
-# Function to generate a random dataset for training
-def generate_training_data(users, all_hobbies):
-    X_train = []
-    y_train = []
-    
-    # Simulate matching data
+# function to generate a random dataset
+def generatetrainingdata(users, allhobbies):
+    Xtrain = []  # features for training
+    ytrain = []  # labels for training
     for i in range(len(users)):
         for j in range(i + 1, len(users)):
             user1 = users[i]
             user2 = users[j]
-            # Only consider users with compatible gender preferences
-            if (user1.preferred_gender == user2.gender and user2.preferred_gender == user1.gender):
-                match_features = prepare_match_data(user1, user2, all_hobbies)
-                X_train.append(match_features)
-                # Simulate a random outcome (1 = match, 0 = no match)
+            # only consider users with compatible gender preferences
+            if (user1.preferredgender == user2.gender and user2.preferredgender == user1.gender):
+                matchfeatures = preparematchdata(user1, user2, allhobbies)
+                Xtrain.append(matchfeatures)
+                # randomly generate a match outcome (1 = match, 0 = no match)
                 outcome = np.random.choice([0, 1])
-                y_train.append(outcome)
-    
-    return np.array(X_train), np.array(y_train)
+                ytrain.append(outcome)
+    # return training data as numpy arrays
+    return np.array(Xtrain), np.array(ytrain)
 
-# Function to train a logistic regression model
-def train_match_model(users, all_hobbies):
-    X_train, y_train = generate_training_data(users, all_hobbies)
+# function to train a logistic regression model
+def trainmatchmodel(users, allhobbies):
+    # generate training data
+    Xtrain, ytrain = generatetrainingdata(users, allhobbies)
+    # create logistic regression model
     model = LogisticRegression()
-    model.fit(X_train, y_train)
-    return model, X_train, y_train  # Return the model and training data
+    # train the model on the training data
+    model.fit(Xtrain, ytrain)
+    # return the trained model and training data
+    return model, Xtrain, ytrain
 
-# Function to predict match using the trained model
-def predict_match(user, potential_matches, model, all_hobbies):
-    X_test = [prepare_match_data(user, match, all_hobbies) for match in potential_matches]
-    return model.predict(X_test), model.predict_proba(X_test)[:, 1]  # Probabilities for being a match
+# function to predict match
+def predictmatch(user, potentialmatches, model, allhobbies):
+    # prepare test data from potential matches
+    Xtest = [preparematchdata(user, match, allhobbies) for match in potentialmatches]
+    # predict match (1 or 0) and probability for being a match
+    return model.predict(Xtest), model.predict_proba(Xtest)[:, 1]
 
-# Function to visualize similarity scores
-def visualize_scores(users, scores):
-    plt.bar([user.name for user in users], scores)
-    plt.xlabel("Users")
-    plt.ylabel("Match Score")
-    plt.title("Match Scores for Potential Matches")
+# function to visualize similarity scores
+def visualizescores(users, scores):
+    plt.bar([user.name for user in users], scores)  # create a bar chart
+    plt.xlabel("Users")  # label for x-axis
+    plt.ylabel("Match Score")  # label for y-axis
+    plt.title("Match Scores for Potential Matches")  # title of the chart
     plt.show()
 
-# Function to display matches and their scores
-def display_matches(matches, scores):
+# function to display matches and their scores
+def displaymatches(matches, scores):
     if not matches:
         print("\nNo matches found.")
         return
-    
     print("\nPotential matches found:")
     for i, match in enumerate(matches):
+        # display user details and match score
         print(f"Name: {match.name}")
         print(f"Age: {match.age}")
         print(f"Location: {match.location}")
         print(f"Match Score: {scores[i]:.2f}")
         print("-----------------------")
 
-# Function to calculate and display the confusion matrix
-def display_confusion_matrix(y_true, y_pred):
-    cm = confusion_matrix(y_true, y_pred)
+# function to calculate and display the confusion matrix
+def displayconfusion_matrix(ytrue, ypred):
+    cm = confusion_matrix(ytrue, ypred)  # compute confusion matrix
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No Match', 'Match'])
-    disp.plot(cmap=plt.cm.Blues)
-    plt.title("Confusion Matrix")
+    disp.plot(cmap=plt.cm.Blues)  # display confusion matrix as a plot
+    plt.title("Confusion Matrix")  # title of the plot
     plt.show()
 
+# main function to execute the program
 def main():
-    # Sample data of users
+    # sample data of users
     users = [
         User("Neha", 26, "Female", "Male", ["fitness", "cooking", "art"], "Dog", "Delhi", 24, 30),
-        User("Karan", 33, "Male", "Female", ["sports", "music", "gaming"], "Cat", "Chennai", 30, 38),
-        User("Sanjana", 29, "Female", "Male", ["travel", "reading", "movies"], "Dog", "Mumbai", 25, 34),
-        User("Rahul", 25, "Male", "Female", ["gaming", "fitness", "sports"], "Dog", "Noida", 22, 28),
-        User("Tina", 31, "Female", "Male", ["yoga", "art", "travel"], "Cat", "Bangalore", 28, 36),
-        User("Mohit", 24, "Male", "Female", ["music", "fitness", "cooking"], "Dog", "Delhi", 21, 30),
-        User("Aditi", 27, "Female", "Male", ["dance", "cooking", "travel"], "Dog", "Chennai", 24, 32),
-        User("Rohit", 29, "Male", "Female", ["movies", "fitness", "reading"], "Cat", "Hyderabad", 26, 34),
-        User("Sita", 22, "Female", "Male", ["sports", "music", "art"], "Dog", "Mumbai", 20, 27),
-        User("Aarav", 28, "Male", "Female", ["cooking", "travel", "fitness"], "Cat", "Delhi", 25, 33),
-        User("Pooja", 30, "Female", "Male", ["fitness", "art", "sports"], "Dog", "Bangalore", 27, 35),
-        User("Ravi", 35, "Male", "Female", ["reading", "gaming", "travel"], "Cat", "Delhi", 31, 40),
-        User("Anisha", 25, "Female", "Male", ["travel", "fitness", "music"], "Dog", "Noida", 22, 30),
-        User("Gaurav", 26, "Male", "Female", ["cooking", "movies", "sports"], "Cat", "Mumbai", 23, 32),
-        User("Simran", 32, "Female", "Male", ["yoga", "art", "fitness"], "Dog", "Hyderabad", 29, 36),
-        User("Vivek", 29, "Male", "Female", ["fitness", "sports", "cooking"], "Cat", "Chennai", 25, 34),
-        User("Jaya", 24, "Female", "Male", ["music", "travel", "reading"], "Dog", "Bangalore", 21, 29),
-        User("Siddharth", 27, "Male", "Female", ["movies", "art", "yoga"], "Cat", "Delhi", 24, 32),
-        User("Neeraj", 30, "Male", "Female", ["fitness", "gaming", "travel"], "Dog", "Mumbai", 27, 35),
-        User("Lata", 28, "Female", "Male", ["sports", "cooking", "reading"], "Cat", "Hyderabad", 25, 34),
         User("Amit", 26, "Male", "Female", ["travel", "music", "yoga"], "Dog", "Delhi", 23, 31),
     ]
-    
-    # Define all hobbies
-    all_hobbies = list(set(hobby for user in users for hobby in user.hobbies))
-    
-    # Train the logistic regression model
-    model, X_train, y_train = train_match_model(users, all_hobbies)
-
-    # Calculate accuracy
-    accuracy = model.score(X_train, y_train)
+    # define all hobbies in the dataset
+    allhobbies = list(set(hobby for user in users for hobby in user.hobbies))
+    # train the logistic regression model
+    model, Xtrain, ytrain = trainmatchmodel(users, allhobbies)
+    # calculate accuracy of the model
+    accuracy = model.score(Xtrain, ytrain)
     print(f"\nModel Accuracy: {accuracy:.2f}")
-
-    # Calculate and print the correlation matrix
-    df = pd.DataFrame(X_train, columns=['Hobby Similarity', 'Age Difference', 'Location Match', 'Pet Match'])
-    correlation_matrix = df.corr()
+    # calculate and print the correlation matrix
+    df = pd.DataFrame(Xtrain, columns=['Hobby Similarity', 'Age Difference', 'Location Match', 'Pet Match'])
+    correlationmatrix = df.corr()
     print("\nCorrelation Matrix:")
-    print(correlation_matrix)
+    print(correlationmatrix)
+    # define the current user
+    currentuser = User("Arun", 21, "Male", "Female", ["music", "yoga", "gaming"], "Dog", "Delhi", 20, 25)
+    # get potential matches excluding the current user
+    potentialmatches = [user for user in users if user != currentuser]
+    # predict matches and scores
+    matchpredictions, matchprobabilities = predictmatch(currentuser, potentialmatches, model, allhobbies)
+    # display matches with their scores
+    displaymatches(potentialmatches, matchprobabilities)
+    # display the confusion matrix for training data
+    displayconfusion_matrix(ytrain, model.predict(Xtrain))
 
-    # Get the current user input
-    current_user = User("Arun", 21, "Male", "Female", ["music", "yoga", "gaming"], "Dog", "Delhi", 20, 25)
-
-    # Get potential matches
-    potential_matches = [user for user in users if user != current_user]
-
-    # Predict matches
-    match_predictions, match_probabilities = predict_match(current_user, potential_matches, model, all_hobbies)
-
-    # Display matches with their scores
-    display_matches(potential_matches, match_probabilities)
-
-    # Display the confusion matrix
-    display_confusion_matrix(y_train, model.predict(X_train))  # Compare true labels with predictions on training data
-
+# execute the program
 if __name__ == "__main__":
     main()
